@@ -1,0 +1,43 @@
+name: Hetzner – Tischlerei Gunia
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+permissions:
+  contents: read
+concurrency:
+  group: tischlerei-gunia-hetzner
+  cancel-in-progress: false
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    env:
+      HETZNER_HOST: ${{ secrets.HETZNER_HOST }}
+      HETZNER_USER: ${{ secrets.HETZNER_USER }}
+      HETZNER_PORT: ${{ secrets.HETZNER_PORT }}
+      HETZNER_PASSWORD: ${{ secrets.HETZNER_PASSWORD }}
+    steps:
+      - uses: actions/checkout@v6
+      - name: Einstellungen prüfen
+        shell: bash
+        run: |
+          test -n "$HETZNER_HOST" || { echo 'HETZNER_HOST fehlt'; exit 1; }
+          test -n "$HETZNER_USER" || { echo 'HETZNER_USER fehlt'; exit 1; }
+          test -n "$HETZNER_PORT" || { echo 'HETZNER_PORT fehlt'; exit 1; }
+          test -n "$HETZNER_PASSWORD" || { echo 'HETZNER_PASSWORD fehlt'; exit 1; }
+          test -f dist/index.html
+      - name: SFTP-Werkzeug installieren
+        run: |
+          sudo apt-get update
+          sudo apt-get install --yes lftp
+      - name: Website in den eingerichteten SFTP-Zielordner übertragen
+        shell: bash
+        run: |
+          lftp -u "$HETZNER_USER","$HETZNER_PASSWORD" "sftp://$HETZNER_HOST:$HETZNER_PORT" -e "
+            set cmd:fail-exit yes;
+            set net:max-retries 2;
+            set net:timeout 20;
+            set sftp:auto-confirm yes;
+            mirror --reverse --verbose dist/ /;
+            bye
+          "
